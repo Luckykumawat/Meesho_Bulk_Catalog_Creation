@@ -1,0 +1,109 @@
+function updateMeeshoFromLinks_MultiModel() {
+
+  const LINKS_SHEET_ID  = '16JIqCxx6F6YzfP4lbPGC3Ga9prJz_5NluERE8RUZXTg';
+  const MEESHO_SHEET_ID = '1hSv8ZAFw_i7dRsloNR6_GYpmjBv3Yi3pHpIvdb-Meaw';
+
+  const START_ROW = 5;
+  const SHEET_NAME = "Mobile-Cases---Covers-Fill this";
+
+  // ---------- OPEN LINKS FILE ----------
+  const linksSS = SpreadsheetApp.openById(LINKS_SHEET_ID);
+  const linksSheet = linksSS.getSheets()[0];
+
+  // ✅ DATA IS IN COLUMN B and C (NOT A and B)
+  const rawData = linksSheet.getRange(2, 2, linksSheet.getLastRow() - 1, 2).getValues();
+
+  // Keep only valid rows
+  const data = rawData.filter(row => row[0] && row[1]);
+
+  if (data.length === 0) {
+    throw new Error("No valid Model Name + URL found in Links sheet");
+  }
+
+  Logger.log("Valid Rows Found: " + data.length);
+
+  // ---------- GROUP BY MODEL ----------
+  const modelMap = {};
+
+  data.forEach(([fileName, url]) => {
+
+    // ✅ Remove only ".jpg"
+    const modelName = String(fileName)
+      .replace(/\.jpg$/i, "")
+      .trim();
+
+    if (!modelMap[modelName]) modelMap[modelName] = [];
+    modelMap[modelName].push(url);
+  });
+
+  // ---------- OPEN MEESHO FILE ----------
+  const meeshoSS = SpreadsheetApp.openById(MEESHO_SHEET_ID);
+  const sheet = meeshoSS.getSheetByName(SHEET_NAME);
+
+  if (!sheet) throw new Error("Meesho sheet not found");
+
+  // ---------- CLEAR OLD DATA ----------
+  sheet.getRange(
+    START_ROW, 1,
+    sheet.getMaxRows() - START_ROW + 1,
+    sheet.getMaxColumns()
+  );
+
+  // ---------- READ DROPDOWN VALUES (COLUMN X) ----------
+  const rule = sheet.getRange("X5").getDataValidation();
+  let dropdownValues = [];
+
+  if (rule) {
+    const type = rule.getCriteriaType();
+    const values = rule.getCriteriaValues();
+
+    if (type === SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
+      dropdownValues = values[0];
+    } else if (type === SpreadsheetApp.DataValidationCriteria.VALUE_IN_RANGE) {
+      dropdownValues = values[0].getValues().flat();
+    }
+  }
+
+  dropdownValues = dropdownValues.map(v => String(v).toLowerCase().trim());
+
+  // ---------- PREPARE OUTPUT ----------
+  const Dvals = [];
+  const AHvals = [];
+  const AIvals = [];
+  const Xvals  = [];
+  const ADvals = [];
+
+  Object.keys(modelMap).forEach(modelName => {
+
+    const modelForX = dropdownValues.includes(modelName.toLowerCase())
+      ? modelName
+      : "Others";
+
+    modelMap[modelName].forEach((url, index) => {
+
+      const num = index + 1;
+
+      Dvals.push([`${modelName} | Stylish & Premium Mobile Case Cover`]);
+      AHvals.push([`STICKER ${modelName} EG ${num}`]);
+      AIvals.push([`STICKER ${modelName} EG ${num}`]);
+      Xvals.push([modelForX]);
+      ADvals.push([url]);
+
+    });
+  });
+
+  const rowCount = Dvals.length;
+
+  if (rowCount === 0) {
+    throw new Error("No rows generated — please check Links sheet");
+  }
+
+  // ---------- WRITE DATA ----------
+  sheet.getRange(START_ROW, 4,  rowCount, 1).setValues(Dvals);   // D
+  sheet.getRange(START_ROW, 34, rowCount, 1).setValues(AHvals); // AH
+  sheet.getRange(START_ROW, 35, rowCount, 1).setValues(AIvals); // AI
+  sheet.getRange(START_ROW, 24, rowCount, 1).setValues(Xvals);  // X
+  sheet.getRange(START_ROW, 30, rowCount, 1).setValues(ADvals); // AD
+
+  Logger.log("✅ Successfully Written Rows: " + rowCount);
+}
